@@ -102,7 +102,7 @@ download_server_jar() {
 # Сборка проекта
 build_project() {
     log "Сборка проекта с помощью Gradle..."
-    if ./gradlew shadowJar; then
+    if ./gradlew deploy; then
         log_success "Сборка проекта завершена успешно"
     else
         log_error "Ошибка при сборке проекта"

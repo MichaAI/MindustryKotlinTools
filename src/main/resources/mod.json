@@ -1,0 +1,9 @@
+{
+  "displayName": "Kotlin Tools",
+  "name": "mindustry-kotlin-tools",
+  "author": "MichaAI",
+  "main": "ru.neodustry.mdkttools.Main",
+  "description": "Some tools for kotlin mindustry mods",
+  "version": 0.1,
+  "java": true
+}

@@ -1,0 +1,126 @@
+buildscript{
+    repositories{
+        mavenCentral()
+    }
+
+    ext{
+        //the build number that this mod is made for
+        mindustryVersion = 'v146'
+        kotlinVersion = "2.0.20"
+        sdkRoot = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+    }
+
+    dependencies{
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+    }
+}
+
+plugins {
+    id 'java'
+    id 'maven-publish'
+    id 'org.jetbrains.kotlin.jvm' version "$kotlinVersion"
+}
+group 'com.github.MichaAI'
+version '0.1'
+
+repositories{
+    mavenCentral()
+    maven{ url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
+    maven{ url 'https://www.jitpack.io' }
+}
+
+dependencies{
+    compileOnly "com.github.Anuken.Arc:arc-core:$mindustryVersion"
+    compileOnly "com.github.Anuken.Mindustry:core:$mindustryVersion"
+
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+}
+
+kotlin {
+    jvmToolchain {
+        languageVersion = JavaLanguageVersion.of(8) // или 21
+    }
+}
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8) // или 21
+    }
+}
+
+task jarAndroid{
+    dependsOn "jar"
+
+    doLast{
+        if(!sdkRoot || !new File(sdkRoot).exists()) throw new GradleException("No valid Android SDK found. Ensure that ANDROID_HOME is set to your Android SDK directory.");
+
+        def platformRoot = new File("$sdkRoot/platforms/").listFiles().sort().reverse().find{ f -> new File(f, "android.jar").exists()}
+
+        if(!platformRoot) throw new GradleException("No android.jar found. Ensure that you have an Android platform installed.")
+
+        //collect dependencies needed for desugaring
+        def dependencies = (configurations.compileClasspath.asList() + configurations.runtimeClasspath.asList() + [new File(platformRoot, "android.jar")]).collect{ "--classpath $it.path" }.join(" ")
+
+        //dex and desugar files - this requires d8 in your PATH
+        "d8 $dependencies --min-api 14 --output ${project.archivesBaseName}Android.jar ${project.archivesBaseName}Desktop.jar"
+                .execute(null, new File("$buildDir/libs")).waitForProcessOutput(System.out, System.err)
+    }
+}
+
+jar{
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveFileName = "${project.archivesBaseName}Desktop.jar"
+
+    from{
+        configurations.runtimeClasspath.collect{ it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+task deploy(type: Jar){
+    dependsOn jarAndroid
+    dependsOn jar
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveFileName = "${project.archivesBaseName}.jar"
+
+    from{ [zipTree("$buildDir/libs/${project.archivesBaseName}Desktop.jar"), zipTree("$buildDir/libs/${project.archivesBaseName}Android.jar")] }
+
+    doLast{
+        delete{
+            delete "$buildDir/libs/${project.archivesBaseName}Desktop.jar"
+            delete "$buildDir/libs/${project.archivesBaseName}Android.jar"
+        }
+    }
+}
+
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+
+            // Дополнительная информация о библиотеке
+            pom {
+                name = 'Mindustry Kotlin Tools'
+                description = 'Some tools for kotlin mindustry mods'
+                url = 'https://github.com/MichaAI/MindustryKotlinTools'
+
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'MichaAI'
+                        name = 'MichaAI'
+                        email = 'michaai@neodustry.ru'
+                    }
+                }
+            }
+        }
+    }
+}
